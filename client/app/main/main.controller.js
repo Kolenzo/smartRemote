@@ -5,9 +5,16 @@ angular.module('smartRemoteApp')
 
     $scope.color = '#FFFFFF';
 
-    socket.socket.on('setScreenLight', function(data){
-      console.log('setLight', data);
-      $scope.color = data.rgb;
-      console.log('light', $scope.color);
+    socket.socket.on('proposals', function(data){
+      console.log('proposals', JSON.stringify(data));
     });
+
+    socket.socket.on('actions', function(data){
+      console.log('actions', JSON.stringify(data));
+    });
+
+    socket.socket.on('devices', function(data){
+      console.log('devices', JSON.stringify(data));
+    });
+
   });

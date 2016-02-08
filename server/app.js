@@ -29,10 +29,14 @@ var socketio = require('socket.io')(server, {
   path: '/socket.io'
 });
 
+var tcp = require('net');
+
 //setting up devices
 var devices = require('./devices/devices');
 
-require('./config/socketio')(socketio, devices);
+var TCPSocket = require('./config/tcp');
+var tcpSocket = new TCPSocket(tcp, devices);
+require('./config/socketio')(socketio, devices, tcpSocket);
 require('./config/express')(app);
 require('./routes')(app);
 
@@ -46,7 +50,8 @@ server.listen(config.port, config.ip, function () {
   });
   ad.start();
 
-  var spark = require('spark');
+  //devices.connectDevices();
+  /**var spark = require('spark');
   spark.login({accessToken: '552a4618eaf1149241c647b1dc33879eca2fa11f'}, function(err, body){
     spark.onEvent('btn_press', function(data) {
       console.info("spark data", data);
@@ -58,7 +63,7 @@ server.listen(config.port, config.ip, function () {
         socketio.sockets.emit('setScreenLight', {rgb: '#ff0000'});
       }
     });
-  });
+  });**/
 });
 
 // Expose app

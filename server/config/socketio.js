@@ -19,7 +19,10 @@ function onDisconnect(socket) {
 }
 
 // When the user connects.. perform this
-function onConnect(socket, socketio, devices) {
+function onConnect(socket, socketio, devices, tcp) {
+  tcp.on('userID', function(id){
+    socketio.sockets.emit('newUser', id);
+  });
 
   socket.emit('devices', devices.getDevices());
 
@@ -28,7 +31,8 @@ function onConnect(socket, socketio, devices) {
   });
 
   socket.on('addUser', function(id){
-    Fingerprint.create({_id: id, active: true}, function(){});
+    tcp.addUser();
+    //Fingerprint.create({_id: id, active: true}, function(){});
   });
 
   socket.on('getRemoteImage', function(data){
@@ -42,7 +46,7 @@ function onConnect(socket, socketio, devices) {
           if (index < settings.actions.length) {
             Preferences.findById({_id: settings.actions[index]}, function (err, action) {
               if (action) {
-                image.in('-page', '+' + (index % 2) * 100 + '+' + Math.floor(index / 2) * 100)
+                image.in('-page', '+' + (((index % 2) * 87) + 13) + '+' + ((Math.floor(index / 2) * 82) + 18))
                   .in('../icons/' + action.icon);
               }
             });
@@ -58,24 +62,49 @@ function onConnect(socket, socketio, devices) {
   });
 
   socket.on('getActions', function(user){
-    var actions = [];
-    UserSettings.find({userID: user}, function(err, res){
+    var sortedActions = [];
+    UserSettings.find({userID: 'default'}, function(err, res){
       if(err) throw err;
       if(res.length > 0){
-        var settings = res[0];
-        for(var i = 0; i < settings.actions.length; i++){
-          Preferences.findById({_id: settings.actions[i]}, function (err, action) {
-            if (action) {
-              actions.push(action);
+        var defaultSettings = res[0];
+          Preferences.find({_id: { $in: defaultSettings.actions}}, function (err, actions) {
+            for(var m = 0; m < defaultSettings.actions.length; m++){
+              for(var n=0;n<actions.length;n++){
+                if(actions[n]._id == defaultSettings.actions[m]){
+                  sortedActions.push(actions[n]);
+                }
+              }
+            }
+            if(user == 'default'){
+              console.info("actions", sortedActions);
+              socketio.sockets.emit('actions', sortedActions);
+            }else{
+              UserSettings.find({userID: user}, function(err, res){
+                if(err) throw err;
+                if(res.length > 0){
+                  var settings = res[0];
+                    Preferences.find({_id: { $in: settings.actions}}, function (err, actions) {
+                      for(var j = 0; j < settings.actions.length; j++){
+                        for(var k=0;k<actions.length;k++){
+                          if(actions[k]._id == settings.actions[j]){
+                            sortedActions.push(actions[k]);
+                          }
+                        }
+                      }
+                      console.info("actions", sortedActions);
+                      socketio.sockets.emit('actions', sortedActions);
+                    });
+
+                }
+              });
             }
           });
-        }
-        socketio.sockets.emit('actions', actions);
+
       }
     });
   });
 
-  socket.on('getProposals', function(user){
+  socket.on('getProposals', function(){
     Proposals.find({}, function(err, res){
       if(err) throw err;
       socketio.sockets.emit('proposals', res);
@@ -95,9 +124,10 @@ function onConnect(socket, socketio, devices) {
   });
 
   socket.on('storeAction', function(action){
-    Preferences.create(action, function (err, preference) {
-      if(err) { return handleError(res, err); }
-      socketio.sockets.emit('storedAction', {action: preference});
+    Preferences.update({ _id: action._id}, action, {upsert: true}, function (err, preference) {
+      UserSettings.update({userID: action.userID}, {$push:{actions: action._id}}, function (err, res) {
+        socketio.sockets.emit('storedAction', {action: preference});
+      });
     });
   });
 
@@ -110,7 +140,7 @@ function onConnect(socket, socketio, devices) {
   require('../api/thing/thing.socket').register(socket);
 }
 
-module.exports = function (socketio, devices) {
+module.exports = function (socketio, devices, tcp) {
   // socket.io (v1.x.x) is powered by debug.
   // In order to see all the debug output, set DEBUG (in server/config/local.env.js) to including the desired scope.
   //
@@ -140,7 +170,7 @@ module.exports = function (socketio, devices) {
     });
 
     // Call onConnect.
-    onConnect(socket, socketio, devices);
+    onConnect(socket, socketio, devices, tcp);
     console.info('[%s] CONNECTED', socket.address);
   });
 };
